@@ -18,7 +18,11 @@ var (
 
 // Server describes required server methods.
 type Server interface {
+	// Serve starts handle the server.
 	Serve() error
+	// Shutdown must gracefully stop the server. It is also needs to
+	// handle context status. For instance we must be able to pass a
+	// context WithTimeout and to be sure that it will be stoped properly.
 	Shutdown(ctx context.Context) error
 }
 
@@ -30,7 +34,7 @@ type Launcher struct {
 	shutdownTimeout time.Duration
 }
 
-// New returns a new Launcher.
+// New returns a new Launcher. It sets shutdownTimeout to 60 seconds by default.
 func New() *Launcher {
 	return &Launcher{
 		ch:              make(chan bool),
