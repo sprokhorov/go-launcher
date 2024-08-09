@@ -18,7 +18,7 @@ func newHS(port string) launcher.Server {
 	return &httpServer{addr: port}
 }
 
-func (hs *httpServer) Serve() error {
+func (hs *httpServer) Run() error {
 	// Set up handler
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
