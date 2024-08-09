@@ -58,7 +58,7 @@ func (srv *Launcher) SetShutdownTimeout(duration time.Duration) {
 // Run starts all servers from internal list. It will return ErrServersListEmpty
 // if servers list is empty.
 //
-// Run method listens syscalls(SIGINT, SIGTERM, SIGQUIT) and calles Server.Shutdown
+// Run method listens syscalls(SIGINT, SIGTERM, SIGQUIT) and calls Server.Shutdown
 // method.
 func (srv *Launcher) Run() error {
 	// Check setup
@@ -124,7 +124,7 @@ func (srv *Launcher) startServers(wg *sync.WaitGroup) {
 		go func(n string, s Server) {
 			log.Printf("Start server %s", n)
 			if err := s.Run(); err != nil {
-				log.Printf("Server %s has been stoped or failed to start, %+v", n, err)
+				log.Printf("Server %s has been stopped or failed to start, %+v", n, err)
 			}
 			log.Println("Server terminated successfully")
 			wg.Done()
