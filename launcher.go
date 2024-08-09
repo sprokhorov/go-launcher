@@ -19,10 +19,10 @@ var (
 // Server describes required server methods.
 type Server interface {
 	// Serve starts handle the server.
-	Serve() error
+	Run() error
 	// Shutdown must gracefully stop the server. It is also needs to
 	// handle context status. For instance we must be able to pass a
-	// context WithTimeout and to be sure that it will be stoped properly.
+	// context WithTimeout to be sure that it will be stopped properly.
 	Shutdown(ctx context.Context) error
 }
 
@@ -123,7 +123,7 @@ func (srv *Launcher) startServers(wg *sync.WaitGroup) {
 	for name, server := range srv.servers {
 		go func(n string, s Server) {
 			log.Printf("Start server %s", n)
-			if err := s.Serve(); err != nil {
+			if err := s.Run(); err != nil {
 				log.Printf("Server %s has been stoped or failed to start, %+v", n, err)
 			}
 			log.Println("Server terminated successfully")

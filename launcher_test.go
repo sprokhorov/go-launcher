@@ -18,7 +18,7 @@ func newHS(port string) Server {
 	return &httpServer{addr: port}
 }
 
-func (hs *httpServer) Serve() error {
+func (hs *httpServer) Run() error {
 	hs.srv = &http.Server{}
 	hs.srv.Addr = hs.addr
 	return hs.srv.ListenAndServe()
@@ -44,7 +44,7 @@ type customServer struct {
 	ctx      context.Context
 }
 
-func (cs *customServer) Serve() error {
+func (cs *customServer) Run() error {
 	<-cs.shutdown
 	log.Println("Custom server is shutdown")
 	return nil
