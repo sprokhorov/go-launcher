@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"net/http"
 
@@ -10,12 +9,17 @@ import (
 )
 
 type httpServer struct {
+	id   string
 	srv  *http.Server
 	addr string
 }
 
-func newHS(port string) launcher.Server {
-	return &httpServer{addr: port}
+func newHS(id string, port string) launcher.Server {
+	return &httpServer{id: id, addr: port}
+}
+
+func (hs *httpServer) Id() string {
+	return hs.id
 }
 
 func (hs *httpServer) Run() error {
@@ -25,7 +29,7 @@ func (hs *httpServer) Run() error {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(200)
 
-		io.WriteString(w, fmt.Sprint("<h1>Hello world!</h1>"))
+		io.WriteString(w, "<h1>Hello world!</h1>")
 	})
 
 	// Configure server
@@ -42,9 +46,9 @@ func (hs *httpServer) Shutdown(ctx context.Context) error {
 
 func main() {
 	l := launcher.New()
-	hs1 := newHS(":8080")
-	l.Add("http1", hs1)
-	hs2 := newHS(":8081")
-	l.Add("http2", hs2)
+	hs1 := newHS("http1", ":8080")
+	l.Add(hs1)
+	hs2 := newHS("http2", ":8081")
+	l.Add(hs2)
 	l.Run()
 }

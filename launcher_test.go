@@ -10,12 +10,17 @@ import (
 )
 
 type httpServer struct {
+	id   string
 	srv  *http.Server
 	addr string
 }
 
-func newHS(port string) Server {
-	return &httpServer{addr: port}
+func newHS(id string, port string) Server {
+	return &httpServer{id: id, addr: port}
+}
+
+func (hs *httpServer) Id() string {
+	return hs.id
 }
 
 func (hs *httpServer) Run() error {
@@ -30,8 +35,8 @@ func (hs *httpServer) Shutdown(ctx context.Context) error {
 
 func TestRun(t *testing.T) {
 	l := New()
-	hs := newHS(":8080")
-	l.Add("http1", hs)
+	hs := newHS("http1", ":8080")
+	l.Add(hs)
 	go func() {
 		time.Sleep(1 * time.Second)
 		syscall.Kill(syscall.Getpid(), syscall.SIGINT)
@@ -40,8 +45,12 @@ func TestRun(t *testing.T) {
 }
 
 type customServer struct {
+	id       string
 	shutdown chan struct{}
-	ctx      context.Context
+}
+
+func (cs *customServer) Id() string {
+	return cs.id
 }
 
 func (cs *customServer) Run() error {
@@ -51,25 +60,21 @@ func (cs *customServer) Run() error {
 }
 
 func (cs *customServer) Shutdown(ctx context.Context) error {
-	for {
-		select {
-		case <-ctx.Done():
-			close(cs.shutdown)
-			return ctx.Err()
-		}
-	}
+	<-ctx.Done()
+	close(cs.shutdown)
+	return ctx.Err()
 }
 
-func newCS() Server {
-	return &customServer{shutdown: make(chan struct{})}
+func newCS(id string) Server {
+	return &customServer{id: id, shutdown: make(chan struct{})}
 }
 
 func TestShutdownTimeout(t *testing.T) {
-	cs := newCS()
+	cs := newCS("custom1")
 
 	l := New()
 	l.SetShutdownTimeout(1)
-	l.Add("custom1", cs)
+	l.Add(cs)
 
 	go func() {
 		log.Println("Stop server in 2 seconds")

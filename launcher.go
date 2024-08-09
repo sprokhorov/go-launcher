@@ -18,6 +18,8 @@ var (
 
 // Server describes required server methods.
 type Server interface {
+	// Id returns a server id
+	Id() string
 	// Serve starts handle the server.
 	Run() error
 	// Shutdown must gracefully stop the server. It is also needs to
@@ -30,8 +32,9 @@ type Server interface {
 type Launcher struct {
 	ch              chan bool
 	waitGroup       *sync.WaitGroup
-	servers         map[string]Server
+	servers         []Server
 	shutdownTimeout time.Duration
+	ctx             context.Context
 }
 
 // New returns a new Launcher. It sets shutdownTimeout to 60 seconds by default.
@@ -39,14 +42,15 @@ func New() *Launcher {
 	return &Launcher{
 		ch:              make(chan bool),
 		waitGroup:       &sync.WaitGroup{},
-		servers:         map[string]Server{},
+		servers:         []Server{},
 		shutdownTimeout: 60,
+		ctx:             context.Background(),
 	}
 }
 
 // Add adds new server to the internal servers list.
-func (srv *Launcher) Add(name string, server Server) {
-	srv.servers[name] = server
+func (srv *Launcher) Add(server Server) {
+	srv.servers = append(srv.servers, server)
 	srv.waitGroup.Add(1)
 }
 
@@ -58,7 +62,7 @@ func (srv *Launcher) SetShutdownTimeout(duration time.Duration) {
 // Run starts all servers from internal list. It will return ErrServersListEmpty
 // if servers list is empty.
 //
-// Run method listens syscalls(SIGINT, SIGTERM, SIGQUIT) and calls Server.Shutdown
+// Run method listens for syscalls(SIGINT, SIGTERM, SIGQUIT) and calls Server.Shutdown
 // method.
 func (srv *Launcher) Run() error {
 	// Check setup
@@ -66,12 +70,13 @@ func (srv *Launcher) Run() error {
 		return ErrServersListEmpty
 	}
 
-	// Subscribe to signals
+	// Subscribe to the signals
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh,
 		syscall.SIGINT,
 		syscall.SIGTERM,
-		syscall.SIGQUIT)
+		syscall.SIGQUIT,
+	)
 
 	// Listen for signals in the new goroutine
 	go func() {
@@ -79,13 +84,13 @@ func (srv *Launcher) Run() error {
 			sig := <-sigCh
 			switch sig {
 			default:
-				log.Printf("Got signal to stop server, %v", sig)
+				log.Printf("Got signal to stop the servers, %v", sig)
 				srv.stopServers()
 			}
 		}
 	}()
 
-	// Create wait group
+	// Create a wait group
 	wg := &sync.WaitGroup{}
 	wg.Add(len(srv.servers))
 
@@ -95,39 +100,45 @@ func (srv *Launcher) Run() error {
 	return nil
 }
 
-// Stop terminates servers. This method needed for manual servers stop.
+// Stop terminates the servers. This method is needed for manual servers stop.
 func (srv *Launcher) Stop() {
 	srv.stopServers()
 }
 
-// stopServers loops through the servers list and stops all of those.
+// startServers loops through the servers list in the adding order and
+// starts them all.
+func (srv *Launcher) startServers(wg *sync.WaitGroup) {
+	for _, server := range srv.servers {
+		go func(s Server) {
+			log.Printf("Start server %s", s.Id())
+			if err := s.Run(); err != nil {
+				log.Printf("Server %s has been stopped or failed to start, %+v", s.Id(), err)
+			}
+			log.Println("Server terminated successfully")
+			wg.Done()
+		}(server)
+	}
+}
+
+// stopServers loops through the servers list and stops them all.
+// If server didn't stop during the srv.shutdownTimeout it will be
+// killed by the system.
+//
+// stopServers loops through the servers list in reverse order in case
+// if the newer servers depend on the early created.
 func (srv *Launcher) stopServers() {
 	ctx, cancel := context.WithTimeout(
-		context.Background(),
+		srv.ctx,
 		srv.shutdownTimeout*time.Second,
 	)
 	defer cancel()
 
-	for name, server := range srv.servers {
-		go func(n string, s Server) {
-			log.Printf("Trying to stop server %s", n)
+	for i := len(srv.servers) - 1; i >= 0; i-- {
+		go func(s Server) {
+			log.Printf("Trying to stop server %s", s.Id())
 			if err := s.Shutdown(ctx); err != nil {
-				log.Printf("Failed to stop server %s, %+v", n, err)
+				log.Printf("Failed to stop server %s, %+v", s.Id(), err)
 			}
-		}(name, server)
-	}
-}
-
-// startServers loops through the servers list and starts all of those.
-func (srv *Launcher) startServers(wg *sync.WaitGroup) {
-	for name, server := range srv.servers {
-		go func(n string, s Server) {
-			log.Printf("Start server %s", n)
-			if err := s.Run(); err != nil {
-				log.Printf("Server %s has been stopped or failed to start, %+v", n, err)
-			}
-			log.Println("Server terminated successfully")
-			wg.Done()
-		}(name, server)
+		}(srv.servers[i])
 	}
 }
