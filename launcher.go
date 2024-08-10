@@ -11,28 +11,28 @@ import (
 	"time"
 )
 
-// ErrServersListEmpty returned by Run method if there are no servers added.
+// ErrGoroutinesListEmpty returned by Run method if there are no goroutines added.
 var (
-	ErrServersListEmpty = errors.New("servers list is empty")
+	ErrGoroutinesListEmpty = errors.New("goroutines list is empty")
 )
 
-// Server describes required server methods.
-type Server interface {
-	// Id returns a server id
+// Goroutine describes required goroutine methods.
+type Goroutine interface {
+	// Id returns a goroutine id
 	Id() string
-	// Serve starts handle the server.
+	// Serve starts handle the goroutine.
 	Run() error
-	// Shutdown must gracefully stop the server. It is also needs to
+	// Shutdown must gracefully stop the goroutine. It is also needs to
 	// handle context status. For instance we must be able to pass a
 	// context WithTimeout to be sure that it will be stopped properly.
 	Shutdown(ctx context.Context) error
 }
 
-// Launcher manages Servers from internal stored list.
+// Launcher manages goroutines from internal stored list.
 type Launcher struct {
 	ch              chan bool
 	waitGroup       *sync.WaitGroup
-	servers         []Server
+	Goroutines      []Goroutine
 	shutdownTimeout time.Duration
 	ctx             context.Context
 }
@@ -42,15 +42,15 @@ func New() *Launcher {
 	return &Launcher{
 		ch:              make(chan bool),
 		waitGroup:       &sync.WaitGroup{},
-		servers:         []Server{},
+		Goroutines:      []Goroutine{},
 		shutdownTimeout: 60,
 		ctx:             context.Background(),
 	}
 }
 
-// Add adds new server to the internal servers list.
-func (srv *Launcher) Add(server Server) {
-	srv.servers = append(srv.servers, server)
+// Add adds new goroutine to the internal goroutines list.
+func (srv *Launcher) Add(Goroutine Goroutine) {
+	srv.Goroutines = append(srv.Goroutines, Goroutine)
 	srv.waitGroup.Add(1)
 }
 
@@ -59,15 +59,15 @@ func (srv *Launcher) SetShutdownTimeout(duration time.Duration) {
 	srv.shutdownTimeout = duration
 }
 
-// Run starts all servers from internal list. It will return ErrServersListEmpty
-// if servers list is empty.
+// Run starts all Goroutines from internal list. It will return ErrGoroutinesListEmpty
+// if goroutines list is empty.
 //
-// Run method listens for syscalls(SIGINT, SIGTERM, SIGQUIT) and calls Server.Shutdown
+// Run method listens for syscalls(SIGINT, SIGTERM, SIGQUIT) and calls goroutine.Shutdown
 // method.
 func (srv *Launcher) Run() error {
 	// Check setup
-	if len(srv.servers) <= 0 {
-		return ErrServersListEmpty
+	if len(srv.Goroutines) <= 0 {
+		return ErrGoroutinesListEmpty
 	}
 
 	// Subscribe to the signals
@@ -84,61 +84,61 @@ func (srv *Launcher) Run() error {
 			sig := <-sigCh
 			switch sig {
 			default:
-				log.Printf("Got signal to stop the servers, %v", sig)
-				srv.stopServers()
+				log.Printf("Got signal to stop the Goroutines, %v", sig)
+				srv.stopGoroutines()
 			}
 		}
 	}()
 
 	// Create a wait group
 	wg := &sync.WaitGroup{}
-	wg.Add(len(srv.servers))
+	wg.Add(len(srv.Goroutines))
 
-	// Start servers
-	srv.startServers(wg)
+	// Start goroutines
+	srv.startGoroutines(wg)
 	wg.Wait()
 	return nil
 }
 
-// Stop terminates the servers. This method is needed for manual servers stop.
+// Stop terminates the goroutines. This method is needed for manual goroutines stop.
 func (srv *Launcher) Stop() {
-	srv.stopServers()
+	srv.stopGoroutines()
 }
 
-// startServers loops through the servers list in the adding order and
+// startGoroutines loops through the goroutines list in the adding order and
 // starts them all.
-func (srv *Launcher) startServers(wg *sync.WaitGroup) {
-	for _, server := range srv.servers {
-		go func(s Server) {
-			log.Printf("Start server %s", s.Id())
-			if err := s.Run(); err != nil {
-				log.Printf("Server %s has been stopped or failed to start, %+v", s.Id(), err)
+func (srv *Launcher) startGoroutines(wg *sync.WaitGroup) {
+	for _, goroutine := range srv.Goroutines {
+		go func(g Goroutine) {
+			log.Printf("Start goroutine %s", g.Id())
+			if err := g.Run(); err != nil {
+				log.Printf("Goroutine %s has been stopped or failed to start, %+v", g.Id(), err)
 			}
-			log.Println("Server terminated successfully")
+			log.Println("Goroutine terminated successfully")
 			wg.Done()
-		}(server)
+		}(goroutine)
 	}
 }
 
-// stopServers loops through the servers list and stops them all.
-// If server didn't stop during the srv.shutdownTimeout it will be
+// stopGoroutines loops through the goroutines list and stops them all.
+// If goroutine didn't stop during the srv.shutdownTimeout it will be
 // killed by the system.
 //
-// stopServers loops through the servers list in reverse order in case
-// if the newer servers depend on the early created.
-func (srv *Launcher) stopServers() {
+// stopGoroutines loops through the goroutines list in reverse order in case
+// if the newer goroutines depend on the early created.
+func (srv *Launcher) stopGoroutines() {
 	ctx, cancel := context.WithTimeout(
 		srv.ctx,
 		srv.shutdownTimeout*time.Second,
 	)
 	defer cancel()
 
-	for i := len(srv.servers) - 1; i >= 0; i-- {
-		go func(s Server) {
-			log.Printf("Trying to stop server %s", s.Id())
-			if err := s.Shutdown(ctx); err != nil {
-				log.Printf("Failed to stop server %s, %+v", s.Id(), err)
+	for i := len(srv.Goroutines) - 1; i >= 0; i-- {
+		go func(g Goroutine) {
+			log.Printf("Trying to stop Goroutine %s", g.Id())
+			if err := g.Shutdown(ctx); err != nil {
+				log.Printf("Failed to stop Goroutine %s, %+v", g.Id(), err)
 			}
-		}(srv.servers[i])
+		}(srv.Goroutines[i])
 	}
 }

@@ -1,11 +1,11 @@
 # go-launcher
-Gracefully shutdown of Go servers
+Gracefully shutdown of Go Goroutines
 
 # Overview
 
 Go launcher provides:
-* Launcher listens syscalls and gracefully stops servers
-* Multiple servers management
+* Launcher listens syscalls and gracefully stops Goroutines
+* Multiple Goroutines management
 
 # Example
 

@@ -9,27 +9,27 @@ import (
 	"time"
 )
 
-type httpServer struct {
+type httpGoroutine struct {
 	id   string
 	srv  *http.Server
 	addr string
 }
 
-func newHS(id string, port string) Server {
-	return &httpServer{id: id, addr: port}
+func newHS(id string, port string) Goroutine {
+	return &httpGoroutine{id: id, addr: port}
 }
 
-func (hs *httpServer) Id() string {
+func (hs *httpGoroutine) Id() string {
 	return hs.id
 }
 
-func (hs *httpServer) Run() error {
+func (hs *httpGoroutine) Run() error {
 	hs.srv = &http.Server{}
 	hs.srv.Addr = hs.addr
 	return hs.srv.ListenAndServe()
 }
 
-func (hs *httpServer) Shutdown(ctx context.Context) error {
+func (hs *httpGoroutine) Shutdown(ctx context.Context) error {
 	return hs.srv.Shutdown(context.Background())
 }
 
@@ -44,29 +44,29 @@ func TestRun(t *testing.T) {
 	l.Run()
 }
 
-type customServer struct {
+type customGoroutine struct {
 	id       string
 	shutdown chan struct{}
 }
 
-func (cs *customServer) Id() string {
+func (cs *customGoroutine) Id() string {
 	return cs.id
 }
 
-func (cs *customServer) Run() error {
+func (cs *customGoroutine) Run() error {
 	<-cs.shutdown
-	log.Println("Custom server is shutdown")
+	log.Println("Custom Goroutine is shutdown")
 	return nil
 }
 
-func (cs *customServer) Shutdown(ctx context.Context) error {
+func (cs *customGoroutine) Shutdown(ctx context.Context) error {
 	<-ctx.Done()
 	close(cs.shutdown)
 	return ctx.Err()
 }
 
-func newCS(id string) Server {
-	return &customServer{id: id, shutdown: make(chan struct{})}
+func newCS(id string) Goroutine {
+	return &customGoroutine{id: id, shutdown: make(chan struct{})}
 }
 
 func TestShutdownTimeout(t *testing.T) {
@@ -77,7 +77,7 @@ func TestShutdownTimeout(t *testing.T) {
 	l.Add(cs)
 
 	go func() {
-		log.Println("Stop server in 2 seconds")
+		log.Println("Stop Goroutine in 2 seconds")
 		time.Sleep(2 * time.Second)
 		l.Stop()
 	}()

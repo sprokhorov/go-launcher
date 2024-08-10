@@ -8,21 +8,21 @@ import (
 	launcher "github.com/sprokhorov/go-launcher"
 )
 
-type httpServer struct {
+type httpGoroutine struct {
 	id   string
 	srv  *http.Server
 	addr string
 }
 
-func newHS(id string, port string) launcher.Server {
-	return &httpServer{id: id, addr: port}
+func newHS(id string, port string) launcher.Goroutine {
+	return &httpGoroutine{id: id, addr: port}
 }
 
-func (hs *httpServer) Id() string {
+func (hs *httpGoroutine) Id() string {
 	return hs.id
 }
 
-func (hs *httpServer) Run() error {
+func (hs *httpGoroutine) Run() error {
 	// Set up handler
 	handler := http.NewServeMux()
 	handler.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -32,7 +32,7 @@ func (hs *httpServer) Run() error {
 		io.WriteString(w, "<h1>Hello world!</h1>")
 	})
 
-	// Configure server
+	// Configure Goroutine
 	hs.srv = &http.Server{}
 	hs.srv.Addr = hs.addr
 	hs.srv.Handler = handler
@@ -40,7 +40,7 @@ func (hs *httpServer) Run() error {
 	return hs.srv.ListenAndServe()
 }
 
-func (hs *httpServer) Shutdown(ctx context.Context) error {
+func (hs *httpGoroutine) Shutdown(ctx context.Context) error {
 	return hs.srv.Shutdown(context.Background())
 }
 
