@@ -20,7 +20,7 @@ var (
 type Goroutine interface {
 	// Id returns a goroutine id
 	Id() string
-	// Serve starts handle the goroutine.
+	// Run starts handle the goroutine.
 	Run() error
 	// Shutdown must gracefully stop the goroutine. It is also needs to
 	// handle context status. For instance we must be able to pass a
@@ -34,7 +34,9 @@ type Launcher struct {
 	waitGroup       *sync.WaitGroup
 	Goroutines      []Goroutine
 	shutdownTimeout time.Duration
+	shuttingDown    bool
 	ctx             context.Context
+	log             Logger
 }
 
 // New returns a new Launcher. It sets shutdownTimeout to 60 seconds by default.
@@ -45,6 +47,7 @@ func New() *Launcher {
 		Goroutines:      []Goroutine{},
 		shutdownTimeout: 60,
 		ctx:             context.Background(),
+		log:             &DefaultLogger{},
 	}
 }
 
@@ -57,6 +60,10 @@ func (srv *Launcher) Add(Goroutine Goroutine) {
 // SetShutdownTimeout change shutdown timeout. Default is 60 seconds.
 func (srv *Launcher) SetShutdownTimeout(duration time.Duration) {
 	srv.shutdownTimeout = duration
+}
+
+func (srv *Launcher) SetLogger(logger Logger) {
+	srv.log = logger
 }
 
 // Run starts all Goroutines from internal list. It will return ErrGoroutinesListEmpty
@@ -84,7 +91,10 @@ func (srv *Launcher) Run() error {
 			sig := <-sigCh
 			switch sig {
 			default:
-				log.Printf("Got signal to stop the Goroutines, %v", sig)
+				srv.shuttingDown = true
+				if s, ok := sig.(syscall.Signal); ok {
+					srv.log.Infof("The main process got an %s (%d) signal, stopping goroutines", signalName(s), int(s))
+				}
 				srv.stopGoroutines()
 			}
 		}
@@ -108,15 +118,20 @@ func (srv *Launcher) Stop() {
 // startGoroutines loops through the goroutines list in the adding order and
 // starts them all.
 func (srv *Launcher) startGoroutines(wg *sync.WaitGroup) {
-	for _, goroutine := range srv.Goroutines {
+	for i := 0; i <= len(srv.Goroutines)-1; i++ {
 		go func(g Goroutine) {
-			log.Printf("Start goroutine %s", g.Id())
+			srv.log.Infof("Start goroutine with id %s", g.Id())
 			if err := g.Run(); err != nil {
-				log.Printf("Goroutine %s has been stopped or failed to start, %+v", g.Id(), err)
+				if srv.shuttingDown {
+					srv.log.Errorf("Goroutine with id %s has been terminated, %+v", g.Id(), err)
+				} else {
+					srv.log.Fatalf("Failed to start goroutine %s, %v", g.Id(), err)
+				}
+			} else {
+				srv.log.Infof("Goroutine with id %s has been terminated without an error")
 			}
-			log.Println("Goroutine terminated successfully")
 			wg.Done()
-		}(goroutine)
+		}(srv.Goroutines[i])
 	}
 }
 
@@ -134,11 +149,81 @@ func (srv *Launcher) stopGoroutines() {
 	defer cancel()
 
 	for i := len(srv.Goroutines) - 1; i >= 0; i-- {
-		go func(g Goroutine) {
-			log.Printf("Trying to stop Goroutine %s", g.Id())
-			if err := g.Shutdown(ctx); err != nil {
-				log.Printf("Failed to stop Goroutine %s, %+v", g.Id(), err)
-			}
-		}(srv.Goroutines[i])
+		g := srv.Goroutines[i]
+		srv.log.Infof("Trying to stop goroutine with id %s", g.Id())
+		if err := g.Shutdown(ctx); err != nil {
+			srv.log.Errorf("Failed to stop goroutine with id %s, %+v", g.Id(), err)
+		}
 	}
+}
+
+// signalName returns a name of the signal
+func signalName(sig syscall.Signal) string {
+	switch sig {
+	case syscall.SIGINT:
+		return "SIGINT"
+	case syscall.SIGTERM:
+		return "SIGTERM"
+	case syscall.SIGKILL:
+		return "SIGKILL"
+	case syscall.SIGQUIT:
+		return "SIGQUIT"
+	case syscall.SIGHUP:
+		return "SIGHUP"
+	case syscall.SIGUSR1:
+		return "SIGUSR1"
+	case syscall.SIGUSR2:
+		return "SIGUSR2"
+	// Add other signals as needed
+	default:
+		return "UNKNOWN"
+	}
+}
+
+// Logger is a standard interface for logging messages.
+type Logger interface {
+	Debug(args ...interface{})
+	Debugf(format string, args ...interface{})
+	Info(args ...interface{})
+	Infof(format string, args ...interface{})
+	Warn(args ...interface{})
+	Warnf(format string, args ...interface{})
+	Error(args ...interface{})
+	Errorf(format string, args ...interface{})
+	Fatal(args ...interface{})
+	Fatalf(format string, args ...interface{})
+}
+
+// DefaultLogger implements Logger interface with standard log package.
+type DefaultLogger struct{}
+
+func (dl *DefaultLogger) Debug(args ...interface{}) {
+	log.Println(args...)
+}
+func (dl *DefaultLogger) Debugf(format string, args ...interface{}) {
+	log.Printf(format, args...)
+}
+func (dl *DefaultLogger) Info(args ...interface{}) {
+	log.Println(args...)
+}
+func (dl *DefaultLogger) Infof(format string, args ...interface{}) {
+	log.Printf(format, args...)
+}
+func (dl *DefaultLogger) Warn(args ...interface{}) {
+	log.Println(args...)
+}
+func (dl *DefaultLogger) Warnf(format string, args ...interface{}) {
+	log.Printf(format, args...)
+}
+func (dl *DefaultLogger) Error(args ...interface{}) {
+	log.Println(args...)
+}
+func (dl *DefaultLogger) Errorf(format string, args ...interface{}) {
+	log.Printf(format, args...)
+}
+func (dl *DefaultLogger) Fatal(args ...interface{}) {
+	log.Fatal(args...)
+}
+func (dl *DefaultLogger) Fatalf(format string, args ...interface{}) {
+	log.Fatalf(format, args...)
 }
