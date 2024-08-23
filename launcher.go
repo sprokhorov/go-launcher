@@ -3,12 +3,13 @@ package launcher
 import (
 	"context"
 	"errors"
-	"log"
 	"os"
 	"os/signal"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/sprokhorov/logkit"
 )
 
 // ErrGoroutinesListEmpty returned by Run method if there are no goroutines added.
@@ -36,7 +37,7 @@ type Launcher struct {
 	shutdownTimeout time.Duration
 	shuttingDown    bool
 	ctx             context.Context
-	log             Logger
+	log             logkit.Logger
 }
 
 // New returns a new Launcher. It sets shutdownTimeout to 60 seconds by default.
@@ -47,7 +48,7 @@ func New() *Launcher {
 		Goroutines:      []Goroutine{},
 		shutdownTimeout: 60,
 		ctx:             context.Background(),
-		log:             &DefaultLogger{},
+		log:             &logkit.DefaultLogger{},
 	}
 }
 
@@ -62,7 +63,7 @@ func (srv *Launcher) SetShutdownTimeout(duration time.Duration) {
 	srv.shutdownTimeout = duration
 }
 
-func (srv *Launcher) SetLogger(logger Logger) {
+func (srv *Launcher) SetLogger(logger logkit.Logger) {
 	srv.log = logger
 }
 
@@ -128,7 +129,7 @@ func (srv *Launcher) startGoroutines(wg *sync.WaitGroup) {
 					srv.log.Fatalf("Failed to start goroutine %s, %v", g.Id(), err)
 				}
 			} else {
-				srv.log.Infof("Goroutine with id %s has been terminated without an error")
+				srv.log.Infof("Goroutine with id %s has been terminated without an error", g.Id())
 			}
 			wg.Done()
 		}(srv.Goroutines[i])
@@ -178,52 +179,4 @@ func signalName(sig syscall.Signal) string {
 	default:
 		return "UNKNOWN"
 	}
-}
-
-// Logger is a standard interface for logging messages.
-type Logger interface {
-	Debug(args ...interface{})
-	Debugf(format string, args ...interface{})
-	Info(args ...interface{})
-	Infof(format string, args ...interface{})
-	Warn(args ...interface{})
-	Warnf(format string, args ...interface{})
-	Error(args ...interface{})
-	Errorf(format string, args ...interface{})
-	Fatal(args ...interface{})
-	Fatalf(format string, args ...interface{})
-}
-
-// DefaultLogger implements Logger interface with standard log package.
-type DefaultLogger struct{}
-
-func (dl *DefaultLogger) Debug(args ...interface{}) {
-	log.Println(args...)
-}
-func (dl *DefaultLogger) Debugf(format string, args ...interface{}) {
-	log.Printf(format, args...)
-}
-func (dl *DefaultLogger) Info(args ...interface{}) {
-	log.Println(args...)
-}
-func (dl *DefaultLogger) Infof(format string, args ...interface{}) {
-	log.Printf(format, args...)
-}
-func (dl *DefaultLogger) Warn(args ...interface{}) {
-	log.Println(args...)
-}
-func (dl *DefaultLogger) Warnf(format string, args ...interface{}) {
-	log.Printf(format, args...)
-}
-func (dl *DefaultLogger) Error(args ...interface{}) {
-	log.Println(args...)
-}
-func (dl *DefaultLogger) Errorf(format string, args ...interface{}) {
-	log.Printf(format, args...)
-}
-func (dl *DefaultLogger) Fatal(args ...interface{}) {
-	log.Fatal(args...)
-}
-func (dl *DefaultLogger) Fatalf(format string, args ...interface{}) {
-	log.Fatalf(format, args...)
 }
