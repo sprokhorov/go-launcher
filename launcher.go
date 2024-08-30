@@ -150,11 +150,12 @@ func (srv *Launcher) stopGoroutines() {
 	defer cancel()
 
 	for i := len(srv.Goroutines) - 1; i >= 0; i-- {
-		g := srv.Goroutines[i]
-		srv.log.Infof("Trying to stop goroutine with id %s", g.Id())
-		if err := g.Shutdown(ctx); err != nil {
-			srv.log.Errorf("Failed to stop goroutine with id %s, %+v", g.Id(), err)
-		}
+		go func(g Goroutine) {
+			srv.log.Infof("Trying to stop goroutine with id %s", g.Id())
+			if err := g.Shutdown(ctx); err != nil {
+				srv.log.Errorf("Failed to stop goroutine with id %s, %+v", g.Id(), err)
+			}
+		}(srv.Goroutines[i])
 	}
 }
 
